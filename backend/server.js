@@ -23,8 +23,37 @@ const inputs = {
     p2: { up: false, down: false }
 };
 
-// Velocidade da raquete (quantos pixels ela anda por frame)
-const PADDLE_SPEED = 5;
+// As regras do "Mundo" pertencem ao servidor
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 400;
+const PADDLE_HEIGHT = 100;
+
+// O Estado Global do Jogo (A Verdade Absoluta)
+let gameState = {
+    // Não precisamos do 'x' das raquetes, pois elas só movem para cima e para baixo no eixo 'y'
+    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
+    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
+    ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }
+};
+
+const PADDLE_SPEED = 5; // Velocidade da raquete (quantos pixels ela anda por frame)
+const BALL_SIZE = 10; // Dimensão da bola (quadrada) para calcular a colisão
+const PADDLE_WIDTH = 10; // Largura da raquete para calcular a colisão
+
+// O X das raquetes é fixo, precisamos definir aqui para calcular a colisão
+const P1_X = 20; 
+const P2_X = CANVAS_WIDTH - 30;
+
+// Velocidade autônoma da bola (quantos pixels ela anda nos eixos X e Y por frame)
+let ballSpeed = { x: 5, y: 5 };
+
+// Função para centralizar a bola após um ponto
+function resetBall() {
+    gameState.ball.x = CANVAS_WIDTH / 2;
+    gameState.ball.y = CANVAS_HEIGHT / 2;
+    // Inverte a direção horizontal para quem tomou o ponto receber o saque
+    ballSpeed.x *= -1; 
+}
 
 // Nossa Fila de espera (FIFO)
 let spectatorsQueue = [];
@@ -88,20 +117,8 @@ io.on('connection', (socket) => {
     });
 });
 
-// 1. As regras do "Mundo" pertencem ao servidor
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 400;
-const PADDLE_HEIGHT = 100;
 
-// 2. O Estado Global do Jogo (A Verdade Absoluta)
-let gameState = {
-    // Não precisamos do 'x' das raquetes, pois elas só movem para cima e para baixo no eixo 'y'
-    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
-    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
-    ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }
-};
-
-// 3. O GAME LOOP (O Coração do Jogo)
+// O GAME LOOP (O Coração do Jogo)
 // O setInterval executa uma função repetidamente. 
 // 1000 milissegundos / 60 = ~16.6ms (Isso nos dá 60 quadros por segundo)
 setInterval(() => {
@@ -122,6 +139,43 @@ setInterval(() => {
     }
     if (inputs.p2.down) {
         gameState.p2.y = Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, gameState.p2.y + PADDLE_SPEED);
+    }
+
+    // --- FÍSICA DA BOLA ---
+    // Movimento Contínuo (A bola anda sozinha)
+    gameState.ball.x += ballSpeed.x;
+    gameState.ball.y += ballSpeed.y;
+
+    // Colisão com o Teto e o Chão
+    // Se bater em cima (0) ou embaixo (altura máxima), inverte a velocidade do eixo Y
+    if (gameState.ball.y <= 0 || gameState.ball.y >= CANVAS_HEIGHT - BALL_SIZE) {
+        ballSpeed.y *= -1;
+    }
+
+    // Colisão com a Raquete 1 (Esquerda)
+    if (gameState.ball.x <= P1_X + PADDLE_WIDTH && // Bateu na frente da raquete
+        gameState.ball.x >= P1_X &&                // Não passou totalmente dela
+        gameState.ball.y + BALL_SIZE >= gameState.p1.y && // Tá abaixo do topo da raquete
+        gameState.ball.y <= gameState.p1.y + PADDLE_HEIGHT) { // Tá acima da base da raquete
+        
+        ballSpeed.x *= -1; // Rebate a bola (Inverte o eixo X)
+        gameState.ball.x = P1_X + PADDLE_WIDTH; // Empurra a bola pra fora pra não bugar dentro
+    }
+
+    // Colisão com a Raquete 2 (Direita)
+    if (gameState.ball.x + BALL_SIZE >= P2_X &&
+        gameState.ball.x + BALL_SIZE <= P2_X + PADDLE_WIDTH &&
+        gameState.ball.y + BALL_SIZE >= gameState.p2.y &&
+        gameState.ball.y <= gameState.p2.y + PADDLE_HEIGHT) {
+        
+        ballSpeed.x *= -1; 
+        gameState.ball.x = P2_X - BALL_SIZE; 
+    }
+
+    // Pontuação (A bola saiu pela esquerda ou direita)
+    if (gameState.ball.x < 0 || gameState.ball.x > CANVAS_WIDTH) {
+        // Alguém fez ponto! Por enquanto, só resetamos a bola.
+        resetBall();
     }
 
     // Transmite o novo estado para todo mundo
