@@ -17,6 +17,15 @@ let players = {
     p2: null  // Guardará o socket.id do Jogador 2 (Direita)
 };
 
+// Aceleradores: Guardam o estado das teclas de cada jogador
+const inputs = {
+    p1: { up: false, down: false },
+    p2: { up: false, down: false }
+};
+
+// Velocidade da raquete (quantos pixels ela anda por frame)
+const PADDLE_SPEED = 5;
+
 // Nossa Fila de espera (FIFO)
 let spectatorsQueue = [];
 
@@ -42,7 +51,19 @@ io.on('connection', (socket) => {
 
     // Escuta as mensagens 'move' vindas EXCLUSIVAMENTE deste jogador
     socket.on('move', (data) => {
-        console.log(`O jogador ${socket.id} enviou:`, data);
+        // Descobre quem enviou a mensagem
+        let playerKey = null;
+        if (socket.id === players.p1) playerKey = 'p1';
+        else if (socket.id === players.p2) playerKey = 'p2';
+
+        // Se foi um jogador válido (e não um espectador), atualiza o estado da tecla
+        if (playerKey) {
+            if (data.key === 'ArrowUp') {
+                inputs[playerKey].up = data.isPressed;
+            } else if (data.key === 'ArrowDown') {
+                inputs[playerKey].down = data.isPressed;
+            }
+        }
     });
 
     //--- LÓGICA DE DESCONEXÃO E PROMOÇÃO (Liberando a vaga) ---
@@ -84,7 +105,26 @@ let gameState = {
 // O setInterval executa uma função repetidamente. 
 // 1000 milissegundos / 60 = ~16.6ms (Isso nos dá 60 quadros por segundo)
 setInterval(() => {
-    // A função io.emit() é um Broadcast: ela grita a mensagem para TODOS os sockets conectados ao mesmo tempo!
+    // --- FÍSICA DAS RAQUETES ---
+    // Movimento do Jogador 1 (Esquerda)
+    if (inputs.p1.up) {
+        // Sobe (diminui o Y), mas não passa do teto (0)
+        gameState.p1.y = Math.max(0, gameState.p1.y - PADDLE_SPEED);
+    }
+    if (inputs.p1.down) {
+        // Desce (aumenta o Y), mas não passa do chão (Altura da Tela - Altura da Raquete)
+        gameState.p1.y = Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, gameState.p1.y + PADDLE_SPEED);
+    }
+
+    // Movimento do Jogador 2 (Direita)
+    if (inputs.p2.up) {
+        gameState.p2.y = Math.max(0, gameState.p2.y - PADDLE_SPEED);
+    }
+    if (inputs.p2.down) {
+        gameState.p2.y = Math.min(CANVAS_HEIGHT - PADDLE_HEIGHT, gameState.p2.y + PADDLE_SPEED);
+    }
+
+    // Transmite o novo estado para todo mundo
     io.emit('gameState', gameState);
 }, 1000 / 60);
 
