@@ -4,6 +4,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
+
+app.use(express.static('../frontend'));
+
 const server = http.createServer(app);
 
 // Configura o Socket.io e permite que o frontend (rodando em outra porta/pasta) se conecte
@@ -183,6 +186,16 @@ setInterval(() => {
 }, 1000 / 60);
 
 const PORTA = 3000;
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.log(`A porta ${PORTA} já está em uso. O servidor já está rodando!`);
+        process.exit(1);
+    } else {
+        console.error(err);
+    }
+}); // Verificação utilizada para saber se a porta já está em uso.
+
 server.listen(PORTA, () => {
     console.log(`Servidor do Pong rodando na porta ${PORTA} 🚀`);
 });
