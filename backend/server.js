@@ -31,11 +31,15 @@ const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 400;
 const PADDLE_HEIGHT = 100;
 
+// Nossa Fila de espera composta por espectadores (FIFO)
+let spectatorsQueue = [];
+
 // O Estado Global do Jogo (A Verdade Absoluta)
 let gameState = {
     // Não precisamos do 'x' das raquetes, pois elas só movem para cima e para baixo no eixo 'y'
     p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2, id: players.p1},
     p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2, id: players.p2 },
+    queue: spectatorsQueue,
     ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }
 };
 
@@ -58,9 +62,6 @@ function resetBall() {
     ballSpeed.x *= -1; 
 }
 
-// Nossa Fila de espera composta por espectadores (FIFO)
-let spectatorsQueue = [];
-
 // O evento 'connection' é disparado toda vez que um novo navegador se conecta
 io.on('connection', (socket) => {
     console.log(`Novo jogador conectado! ID: ${socket.id}`);
@@ -79,6 +80,7 @@ io.on('connection', (socket) => {
     } else {
         // Se as vagas estão cheias, entra para o final da fila
         spectatorsQueue.push(socket.id);
+        gameState.queue = spectatorsQueue;
         console.log(`${socket.id} entrou para a fila de espectadores. Posição: ${spectatorsQueue.length}`);
         socket.emit('playerRole', 'spectator');
     }
@@ -120,6 +122,7 @@ io.on('connection', (socket) => {
             // Se um espectador desistir e fechar a aba, precisamos tirá-lo da fila
             // para não tentar promover um "fantasma" depois
             spectatorsQueue = spectatorsQueue.filter(id => id !== socket.id);
+            gameState.queue = spectatorsQueue;
         }
     });
 });

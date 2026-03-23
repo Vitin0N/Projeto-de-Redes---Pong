@@ -21,6 +21,8 @@ socket.on('gameState', (state) => {
 // 3. A função que pinta tudo na tela
 function draw() {
     if (!stateDoServidor) return;
+    
+    let specid = stateDoServidor.queue ? stateDoServidor.queue.findIndex(id => id === socket.id) : -1
 
     // Limpa a tela
     ctx.fillStyle = 'black';
@@ -29,10 +31,16 @@ function draw() {
     // Cor dos elementos
     ctx.fillStyle = 'white';
 
-    // 🔹 TEXTO NO TOPO CENTRAL
-    ctx.font = '30px Arial';           // tamanho e fonte
-    ctx.textAlign = 'center';          // centraliza horizontalmente
-    
+    // Configurações do texto
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'right'; // alinha à direita
+    ctx.fillStyle = 'white';
+
+    // Informação da posição da fila de espectadores
+    if(specid != -1){
+        ctx.fillText(`Posição na fila: ${specid + 1}`, canvas.width - 10, 30);
+    }
+
     // Raquete esquerda, se o jogador for o player 1, ele pinta a raquete de verde
     if(socket.id == stateDoServidor.p1.id){
         ctx.fillStyle = 'green';
@@ -50,7 +58,7 @@ function draw() {
     } else {
         ctx.fillRect(canvas.width - 30, stateDoServidor.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
     }
-    
+
     // Bola
     ctx.fillRect(stateDoServidor.ball.x, stateDoServidor.ball.y, BALL_SIZE, BALL_SIZE);
     
