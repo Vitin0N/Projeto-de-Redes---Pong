@@ -11,6 +11,8 @@ const BALL_SIZE = 10;
 
 // O estado começa vazio, esperando as ordens do servidor
 let stateDoServidor = null;
+let role = null;
+let specpos = null;
 
 // Toda vez que o servidor gritar "gameState" (60 vezes por segundo), nós atualizamos e desenhamos!
 socket.on('gameState', (state) => {
@@ -18,11 +20,17 @@ socket.on('gameState', (state) => {
     draw(); 
 });
 
+socket.on('playerRole', (playerrole) => {
+    role = playerrole;
+})
+
+socket.on('queuePosition', (pos) => {
+    specpos = pos;
+})
+
 // 3. A função que pinta tudo na tela
 function draw() {
     if (!stateDoServidor) return;
-    
-    let specid = stateDoServidor.queue ? stateDoServidor.queue.findIndex(id => id === socket.id) : -1
 
     // Limpa a tela
     ctx.fillStyle = 'black';
@@ -37,12 +45,12 @@ function draw() {
     ctx.fillStyle = 'white';
 
     // Informação da posição da fila de espectadores
-    if(specid != -1){
-        ctx.fillText(`Posição na fila: ${specid + 1}`, canvas.width - 10, 30);
+    if(specpos){
+        ctx.fillText(`Posição na fila: ${specpos}`, canvas.width - 10, 30);
     }
 
     // Raquete esquerda, se o jogador for o player 1, ele pinta a raquete de verde
-    if(socket.id == stateDoServidor.p1.id){
+    if(role == 'p1'){
         ctx.fillStyle = 'green';
         ctx.fillRect(20, stateDoServidor.p1.y, PADDLE_WIDTH, PADDLE_HEIGHT);
         ctx.fillStyle = 'white';  
@@ -51,7 +59,7 @@ function draw() {
     }
     
     // Raquete direita, se o jogador for o player 2, a raquete ficará verde.
-    if (socket.id == stateDoServidor.p2.id){
+    if (role == 'p2'){
         ctx.fillStyle = 'green';
         ctx.fillRect(canvas.width - 30, stateDoServidor.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
         ctx.fillStyle = 'white';

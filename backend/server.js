@@ -37,9 +37,8 @@ let spectatorsQueue = [];
 // O Estado Global do Jogo (A Verdade Absoluta)
 let gameState = {
     // Não precisamos do 'x' das raquetes, pois elas só movem para cima e para baixo no eixo 'y'
-    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2, id: players.p1},
-    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2, id: players.p2 },
-    queue: spectatorsQueue,
+    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2},
+    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2},
     ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }
 };
 
@@ -69,20 +68,19 @@ io.on('connection', (socket) => {
     // --- LÓGICA DE ATRIBUIÇÃO E FILA ---
     if (!players.p1) {
         players.p1 = socket.id;
-        gameState.p1.id = players.p1;
+
         console.log(`${socket.id} assumiu a Raquete 1 (Esquerda)`);
         socket.emit('playerRole', 'p1');
     } else if (!players.p2) {
         players.p2 = socket.id;
-        gameState.p2.id = players.p2;
         console.log(`${socket.id} assumiu a Raquete 2 (Direita)`);
         socket.emit('playerRole', 'p2');
     } else {
         // Se as vagas estão cheias, entra para o final da fila
         spectatorsQueue.push(socket.id);
-        gameState.queue = spectatorsQueue;
         console.log(`${socket.id} entrou para a fila de espectadores. Posição: ${spectatorsQueue.length}`);
         socket.emit('playerRole', 'spectator');
+        atualizarPosicoesDaFila()
     }
 
     // Escuta as mensagens 'move' vindas EXCLUSIVAMENTE deste jogador
@@ -108,21 +106,20 @@ io.on('connection', (socket) => {
         // Se quem saiu era um dos jogadores, liberamos a vaga para o próximo
         if (players.p1 === socket.id) {
             players.p1 = null;
-            gameState.p1.id = players.p1;
             console.log('A vaga do Jogador 1 está livre novamente.');
             promoverEspectador('p1'); // Tenta promover alguém da fila
 
         } else if (players.p2 === socket.id) {
             players.p2 = null;
-            gameState.p2.id = players.p2;
             console.log('A vaga do Jogador 2 está livre novamente.');
             promoverEspectador('p2'); // Tenta promover alguém da fila
 
         } else {
             // Se um espectador desistir e fechar a aba, precisamos tirá-lo da fila
             // para não tentar promover um "fantasma" depois
-            spectatorsQueue = spectatorsQueue.filter(id => id !== socket.id);
-            gameState.queue = spectatorsQueue;
+            spectatorsQueue = spectatorsQueue.filter(id => id !== socket.id)
+
+            atualizarPosicoesDaFila()
         }
     });
 });
@@ -218,6 +215,16 @@ function promoverEspectador(vaga) {
         console.log(`Espectador ${novoJogadorId} foi promovido para a vaga ${vaga.toUpperCase()}!`);
         
         // Mensagem DIRECIONADA: Avisa especificamente este usuário que ele subiu de cargo
-        io.to(novoJogadorId).emit('playerRole', vaga); 
+        io.to(novoJogadorId).emit('playerRole', vaga);
+        io.to(novoJogadorId).emit('queuePosition', null); // Remove o texto que aparece em relação à fila da tela
+        atualizarPosicoesDaFila(); // Atualiza fila de espectadores
     }
+}
+
+// Função para avisar cada espectador de sua posição exata na fila
+function atualizarPosicoesDaFila() {
+    spectatorsQueue.forEach((socketId, index) => {
+        // Envia a posição (index + 1) apenas para o socket específico
+        io.to(socketId).emit('queuePosition', index + 1);
+    });
 }
