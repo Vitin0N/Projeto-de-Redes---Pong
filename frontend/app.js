@@ -12,65 +12,85 @@ let stateDoServidor = null;
 let role = null;
 let specpos = null;
 
-// Toda vez que o servidor gritar "gameState" (60 vezes por segundo), nós atualizamos e desenhamos!
+// Função matemática de suavização (Linear Interpolation)
+function lerp(start, end, factor) {
+    return start + (end - start) * factor;
+}
+
+// O estado visual do cliente (começa no centro)
+let clientState = {
+    p1: { y: 150 },
+    p2: { y: 150 },
+    ball: { x: 400, y: 200 }
+};
+
+const LERP_FACTOR = 0.15; // Quão rápido ele tenta alcançar o servidor (0.1 a 0.3 é o ideal)
+
+// O socket agora APENAS atualiza o estado alvo. O desenho acontece em paralelo.
 socket.on('gameState', (state) => {
     stateDoServidor = state;
-    draw(); 
 });
 
 socket.on('playerRole', (playerrole) => {
     role = playerrole;
-})
+});
 
 socket.on('queuePosition', (pos) => {
     specpos = pos;
-})
+});
 
-// 3. A função que pinta tudo na tela
-function draw() {
-    if (!stateDoServidor) return;
+// 3. O Game Loop: A função que roda continuamente na frequência do monitor (ex: 60 FPS)
+function renderLoop() {
+    // Se já recebemos algum estado do servidor, calculamos a interpolação
+    if (stateDoServidor) {
+        // Desliza o estado visual (clientState) em direção ao estado real (stateDoServidor)
+        clientState.ball.x = lerp(clientState.ball.x, stateDoServidor.ball.x, LERP_FACTOR);
+        clientState.ball.y = lerp(clientState.ball.y, stateDoServidor.ball.y, LERP_FACTOR);
+        clientState.p1.y = lerp(clientState.p1.y, stateDoServidor.p1.y, LERP_FACTOR);
+        clientState.p2.y = lerp(clientState.p2.y, stateDoServidor.p2.y, LERP_FACTOR);
+    }
 
-    // Limpa a tela
+    // Limpa a tela inteira a cada frame
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Cor dos elementos
+    // Cor base e fonte
     ctx.fillStyle = 'white';
-
-    // Configurações do texto
     ctx.font = '20px Arial';
-    ctx.textAlign = 'right'; // alinha à direita
-    ctx.fillStyle = 'white';
 
-    // Exibição do RTT (Ping)
+    // --- HUD (Heads-Up Display) ---
+    // Exibição do RTT (Ping) no canto esquerdo
     ctx.textAlign = 'left';
     ctx.fillText(`Ping: ${typeof currentPing !== 'undefined' ? currentPing : 0}ms`, 10, 30);
 
-    // Informação da posição da fila de espectadores
+    // Informação da posição da fila de espectadores no canto direito
+    ctx.textAlign = 'right';
     if(specpos){
         ctx.fillText(`Posição na fila: ${specpos}`, canvas.width - 10, 30);
     }
 
-    // Raquete esquerda, se o jogador for o player 1, ele pinta a raquete de verde
+    // --- DESENHO DOS ELEMENTOS (Usando estritamente o clientState) ---
+    
+    // Raquete esquerda (P1)
     if(role == 'p1'){
         ctx.fillStyle = 'green';
-        ctx.fillRect(20, stateDoServidor.p1.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        ctx.fillRect(20, clientState.p1.y, PADDLE_WIDTH, PADDLE_HEIGHT);
         ctx.fillStyle = 'white';  
-    }else {
-        ctx.fillRect(20, stateDoServidor.p1.y, PADDLE_WIDTH, PADDLE_HEIGHT);    
+    } else {
+        ctx.fillRect(20, clientState.p1.y, PADDLE_WIDTH, PADDLE_HEIGHT);    
     }
     
-    // Raquete direita, se o jogador for o player 2, a raquete ficará verde.
+    // Raquete direita (P2)
     if (role == 'p2'){
         ctx.fillStyle = 'green';
-        ctx.fillRect(canvas.width - 30, stateDoServidor.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        ctx.fillRect(canvas.width - 30, clientState.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
         ctx.fillStyle = 'white';
     } else {
-        ctx.fillRect(canvas.width - 30, stateDoServidor.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        ctx.fillRect(canvas.width - 30, clientState.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
     }
 
     // Bola
-    ctx.fillRect(stateDoServidor.ball.x, stateDoServidor.ball.y, BALL_SIZE, BALL_SIZE);
+    ctx.fillRect(clientState.ball.x, clientState.ball.y, BALL_SIZE, BALL_SIZE);
     
     // Linha do meio
     ctx.setLineDash([5, 15]);
@@ -79,17 +99,18 @@ function draw() {
     ctx.lineTo(canvas.width / 2, canvas.height);
     ctx.strokeStyle = 'white';
     ctx.stroke();
+
+    // Requisita ao navegador o próximo frame de animação para manter o loop rodando
+    requestAnimationFrame(renderLoop);
 }
 
-// Chama a função pela primeira vez para ver o resultado
-draw();
+// Inicia o Game Loop pela primeira vez
+requestAnimationFrame(renderLoop);
 
-
+// --- CONTROLES DE INPUT ---
 // Escuta quando o jogador APERTA a tecla
 document.addEventListener('keydown', (event) => {
-    // Filtramos para enviar mensagens APENAS se for a seta para cima ou para baixo
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-        // Envia a mensagem para o servidor pelo socket
         socket.emit('move', { key: event.key, isPressed: true });
     }
 });

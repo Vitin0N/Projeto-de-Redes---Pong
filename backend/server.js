@@ -192,9 +192,9 @@ setInterval(() => {
 
     // --- DEGRADAÇÃO DE REDE (TESTANDO O GARGALO DO TCP) ---
     const SIMULATE_LATENCY_MS = 150; // Atraso de 150ms
-    const PACKET_LOSS_RATE = 0.0;    // 10% de chance de perder o pacote
+    const PACKET_LOSS_RATE = 0.2;    // 20% de chance de perder o pacote
 
-    // Simulando a perda de pacote (se cair nos 10%, não envia o frame)
+    // Simulando a perda de pacote (se cair nos 20%, não envia o frame)
     if (Math.random() > PACKET_LOSS_RATE) {
         
         // Simulando a latência (atrasa o envio) transmitindo para todos
