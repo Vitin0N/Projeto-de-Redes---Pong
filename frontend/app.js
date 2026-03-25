@@ -13,9 +13,7 @@ let role = null;
 let specpos = null;
 
 // Função matemática de suavização (Linear Interpolation)
-function lerp(start, end, factor) {
-    return start + (end - start) * factor;
-}
+function lerp(start, end, factor) { return start + (end - start) * factor; }
 
 // O estado visual do cliente (começa no centro)
 let clientState = {
@@ -89,7 +87,14 @@ function renderLoop() {
         ctx.fillRect(canvas.width - 30, clientState.p2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
     }
 
-    // Bola
+    // 1. Desenha a "Bola Real do Servidor" (atrasada e saltitante) - O FANTASMA
+    if (stateDoServidor) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Branco transparente
+        ctx.fillRect(stateDoServidor.ball.x, stateDoServidor.ball.y, BALL_SIZE, BALL_SIZE);
+    }
+
+    // 2. Desenha a "Bola Interpolada" (suave) - A REALIDADE VISUAL
+    ctx.fillStyle = 'white';
     ctx.fillRect(clientState.ball.x, clientState.ball.y, BALL_SIZE, BALL_SIZE);
     
     // Linha do meio
