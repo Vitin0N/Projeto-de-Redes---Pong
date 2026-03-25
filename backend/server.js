@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -9,33 +8,36 @@ app.use(express.static('../frontend'));
 
 const server = http.createServer(app);
 
-// Configura o Socket.io e permite que o frontend (rodando em outra porta/pasta) se conecte
+// Configura o Socket.io e permite que o frontend rodando em outro computador se conecte
 const io = new Server(server, {
     cors: { origin: "*" } 
 });
 
-// Variável para guardar quem está jogando
+// Variável para guardar quem está jogando no momento
 let players = {
     p1: null, // Guardará o socket.id do Jogador 1 (Esquerda)
     p2: null  // Guardará o socket.id do Jogador 2 (Direita)
 };
 
-// Aceleradores: Guardam o estado das teclas de cada jogador
+// Inputs: Guardam o estado das teclas de cada jogador
 const inputs = {
     p1: { up: false, down: false },
     p2: { up: false, down: false }
 };
 
-// As regras do "Mundo" pertencem ao servidor
+// As regras do jogo pertencem ao servidor
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 400;
 const PADDLE_HEIGHT = 100;
 
-// O Estado Global do Jogo (A Verdade Absoluta)
+// Nossa Fila de espera composta por espectadores (FIFO)
+let spectatorsQueue = [];
+
+// O Estado Global do Jogo, ou seja, a posição da bola e a posição dos paddles
 let gameState = {
     // Não precisamos do 'x' das raquetes, pois elas só movem para cima e para baixo no eixo 'y'
-    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
-    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2 },
+    p1: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2},
+    p2: { y: CANVAS_HEIGHT / 2 - PADDLE_HEIGHT / 2},
     ball: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 }
 };
 
@@ -58,18 +60,16 @@ function resetBall() {
     ballSpeed.x *= -1; 
 }
 
-// Nossa Fila de espera (FIFO)
-let spectatorsQueue = [];
-
 // O evento 'connection' é disparado toda vez que um novo navegador se conecta
 io.on('connection', (socket) => {
     console.log(`Novo jogador conectado! ID: ${socket.id}`);
 
-    // --- LÓGICA DE ATRIBUIÇÃO E FILA ---
+    // --- Lógica de atribuição de jogadores e preenchimento da fila de espectadores ---
     if (!players.p1) {
         players.p1 = socket.id;
+
         console.log(`${socket.id} assumiu a Raquete 1 (Esquerda)`);
-        socket.emit('playerRole', 'p1'); 
+        socket.emit('playerRole', 'p1');
     } else if (!players.p2) {
         players.p2 = socket.id;
         console.log(`${socket.id} assumiu a Raquete 2 (Direita)`);
@@ -79,9 +79,10 @@ io.on('connection', (socket) => {
         spectatorsQueue.push(socket.id);
         console.log(`${socket.id} entrou para a fila de espectadores. Posição: ${spectatorsQueue.length}`);
         socket.emit('playerRole', 'spectator');
+        atualizarPosicoesDaFila()
     }
 
-    // Escuta as mensagens 'move' vindas EXCLUSIVAMENTE deste jogador
+    // Escuta as mensagens 'move' vindas EXCLUSIVAMENTE dos jogadores
     socket.on('move', (data) => {
         // Descobre quem enviou a mensagem
         let playerKey = null;
@@ -115,7 +116,9 @@ io.on('connection', (socket) => {
         } else {
             // Se um espectador desistir e fechar a aba, precisamos tirá-lo da fila
             // para não tentar promover um "fantasma" depois
-            spectatorsQueue = spectatorsQueue.filter(id => id !== socket.id);
+            spectatorsQueue = spectatorsQueue.filter(id => id !== socket.id)
+
+            atualizarPosicoesDaFila()
         }
     });
 });
@@ -211,6 +214,16 @@ function promoverEspectador(vaga) {
         console.log(`Espectador ${novoJogadorId} foi promovido para a vaga ${vaga.toUpperCase()}!`);
         
         // Mensagem DIRECIONADA: Avisa especificamente este usuário que ele subiu de cargo
-        io.to(novoJogadorId).emit('playerRole', vaga); 
+        io.to(novoJogadorId).emit('playerRole', vaga);
+        io.to(novoJogadorId).emit('queuePosition', null); // Remove o texto que aparece em relação à fila da tela
+        atualizarPosicoesDaFila(); // Atualiza fila de espectadores
     }
+}
+
+// Função para avisar cada espectador de sua posição exata na fila
+function atualizarPosicoesDaFila() {
+    spectatorsQueue.forEach((socketId, index) => {
+        // Envia a posição (index + 1) apenas para o socket específico
+        io.to(socketId).emit('queuePosition', index + 1);
+    });
 }
